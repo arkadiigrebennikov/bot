@@ -1,9 +1,5 @@
 {
   "crons": [
-    {
-      "path": "/api/send",
-      "schedule": "0 9 * * *",
-      "timezone": "Europe/Madrid"
-    }
+    { "path": "/api/send", "schedule": "0 7 * * *" }
   ]
 }
