@@ -1,10 +1,6 @@
-// api/send.ts
-// Обычная серверная функция на Node (НЕ edge)
+// api/send.js — Node.js serverless (НЕ edge)
 
-type TgResponse = { ok: boolean; [k: string]: any };
-
-function hashInt(str: string) {
-  // простенький детерминированный хэш → не нужен стейт/БД
+function hashInt(str) {
   let h = 2166136261 >>> 0;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);
@@ -13,23 +9,21 @@ function hashInt(str: string) {
   return h >>> 0;
 }
 
-function parseList(input?: string): string[] {
+function parseList(input) {
   if (!input) return [];
-  const trimmed = input.trim();
+  const trimmed = String(input).trim();
   if (!trimmed) return [];
-  // пробуем как JSON-массив
   try {
     const arr = JSON.parse(trimmed);
     if (Array.isArray(arr)) return arr.map((x) => String(x).trim()).filter(Boolean);
   } catch {}
-  // иначе — по переводу строки/запятым/точке с запятой
   return trimmed
     .split(/\r?\n|,|;/g)
     .map((s) => s.trim())
     .filter(Boolean);
 }
 
-function validTimes(times: string[]): string[] {
+function validTimes(times) {
   return times
     .map((t) => t.replace(/\s+/g, ""))
     .filter((t) => /^\d{1,2}:\d{2}$/.test(t))
@@ -54,7 +48,7 @@ function getMadridTimeParts(d = new Date()) {
     minute: "2-digit",
   }).formatToParts(d);
 
-  const get = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value!;
+  const get = (t) => parts.find((p) => p.type === t)?.value;
   const year = get("year");
   const month = get("month");
   const day = get("day");
@@ -67,7 +61,6 @@ export default async function handler(req, res) {
   const token = process.env.BOT_TOKEN;
   const chatId = process.env.CHAT_ID;
 
-  // источники: ENV MESSAGES/TIMES; есть дефолты на всякий
   const messages = parseList(process.env.MESSAGES);
   const timesRaw = parseList(process.env.TIMES);
   const times = validTimes(timesRaw);
@@ -85,18 +78,17 @@ export default async function handler(req, res) {
   const nowParts = getMadridTimeParts(new Date());
   const { isoDate, hhmm } = nowParts;
 
-  // детерминированный выбор пары (сообщение + время) на день
-  const baseSeed = hashInt(`${isoDate}|${process.env.SEED ?? ""}|${msgs.join("|")}|${tms.join("|")}`);
+  const seed = `${isoDate}|${process.env.SEED ?? ""}|${msgs.join("|")}|${tms.join("|")}`;
+  const baseSeed = hashInt(seed);
   const msgIndex = baseSeed % msgs.length;
-  const timeIndex = ((baseSeed * 2654435761) >>> 0) % tms.length; // второе «независимое» распределение
+  const timeIndex = ((baseSeed * 2654435761) >>> 0) % tms.length;
 
   const todaysMessage = msgs[msgIndex];
-  const todaysTime = tms[timeIndex]; // формат "HH:MM" по Europe/Madrid
+  const todaysTime = tms[timeIndex];
 
   const url = new URL(req.url, `http://${req.headers.host}`);
   const force = url.searchParams.get("force");
 
-  // отправляем либо когда наступила выбранная минута, либо если ?force=1
   if (force !== "1" && hhmm !== todaysTime) {
     return res.status(204).json({
       ok: true,
@@ -116,7 +108,7 @@ export default async function handler(req, res) {
     body: JSON.stringify(payload),
   });
 
-  const data = (await r.json()) as TgResponse;
+  const data = await r.json();
   const status = data?.ok ? 200 : 500;
   return res.status(status).json({ ...data, meta: { isoDate, hhmm, todaysTime, msgIndex, timeIndex } });
 }
