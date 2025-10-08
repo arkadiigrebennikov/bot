@@ -1,4 +1,3 @@
-export const config = { runtime: "edge" };
 
 export default async function handler(req: Request) {
   const token = process.env.BOT_TOKEN;
